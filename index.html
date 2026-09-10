@@ -148,15 +148,12 @@
       <span class="db-badge db-badge-neon"><span class="sync-dot"></span> Firebase Sync Mode</span>
     </div>
     <div class="login-eyebrow">Attendance System</div>
-    <div class="login-title">Welcome back</div>
-    <div class="login-sub">Enter your code to continue</div>
-    <label class="field-label" for="code-input">Your code</label>
-    <input class="field-input" id="code-input" type="text" placeholder="e.g. ADM001" autocomplete="off" spellcheck="false" style="font-family:inherit;font-size:15px" />
+    <div class="login-title">Admin Portal</div>
+    <div class="login-sub">Enter your admin credentials to continue</div>
+    <label class="field-label" for="code-input">Admin Name / ID</label>
+    <input class="field-input" id="code-input" type="text" placeholder="Enter admin username or ID" autocomplete="off" spellcheck="false" style="font-family:inherit;font-size:15px" />
     <div class="login-err" id="login-err"></div>
     <button class="login-btn" id="btn-login">Sign in →</button>
-    <div class="login-hint" id="login-hint">
-      Live syncing via Firebase Realtime Database.<br>Admin code: <strong>ADM001</strong>
-    </div>
   </div>
 </div>
 
@@ -261,24 +258,27 @@
   </div>
 </div>
 
-
 <!-- ADD USER MODAL -->
 <div class="modal-backdrop" id="add-user-modal">
   <div class="modal">
     <div class="modal-title">Add New User</div>
     
-    <label class="field-label" style="display:block; font-size:12px; font-weight:600; margin-bottom:4px;">Full Name</label>
-    <input class="field-input" id="new-user-name" type="text" placeholder="e.g. John Doe" autocomplete="off" style="width:100%; padding:8px; margin-bottom:12px; border:1px solid #ccc; border-radius:4px; font-family:inherit; font-size:14px;" />
+    <div style="margin-bottom: 12px;">
+      <label class="field-label" for="new-user-name">Full Name</label>
+      <input class="field-input" id="new-user-name" type="text" placeholder="e.g. John Doe" autocomplete="off" spellcheck="false" />
+    </div>
+
+    <div style="margin-bottom: 12px;">
+      <label class="field-label" for="new-user-role">Role</label>
+      <select id="new-user-role" class="field-input">
+        <option value="user">User</option>
+        <option value="admin">Admin</option>
+      </select>
+    </div>
     
-    <label class="field-label" style="display:block; font-size:12px; font-weight:600; margin-bottom:4px;">Role</label>
-    <select id="new-user-role" class="field-input" style="width:100%; padding:8px; margin-bottom:12px; border:1px solid #ccc; border-radius:4px; font-family:inherit; font-size:14px;">
-      <option value="user">User</option>
-      <option value="admin">Admin</option>
-    </select>
+    <div class="login-err" id="add-user-err"></div>
     
-    <div class="login-err" id="add-user-err" style="display:none; color:red; font-size:13px; margin-bottom:10px;"></div>
-    
-    <div class="modal-actions" style="display:flex; justify-content:flex-end; gap:8px;">
+    <div class="modal-actions">
       <button class="btn btn-ghost" id="btn-close-modal" type="button">Cancel</button>
       <button class="btn btn-dark" id="btn-confirm-user" type="button">Add User</button>
     </div>
@@ -384,14 +384,14 @@
   function fmtDate(iso){ if(!iso) return ''; const[y,m,d]=iso.split('-'); return d+' '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+m-1]; }
   function fmtDateLong(iso){ if(!iso) return ''; const[y,m,d]=iso.split('-'); return d+' '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+m-1]+' '+y; }
 
-  // -------------------------------------------------------------
-  // AUTHENTICATION
+// -------------------------------------------------------------
+  // AUTHENTICATION (ADMIN ONLY)
   // -------------------------------------------------------------
   function doLogin() {
     const nameInput = document.getElementById('code-input').value.trim();
     const errEl = document.getElementById('login-err');
     errEl.style.display = 'none';
-    if (!nameInput) { errEl.textContent='Please enter your name or ID.'; errEl.style.display='block'; return; }
+    if (!nameInput) { errEl.textContent = 'Please enter your admin name or ID.'; errEl.style.display = 'block'; return; }
 
     // Match either user Name or UUID
     const matchedUser = state.users.find(u => 
@@ -399,7 +399,14 @@
     );
 
     if (!matchedUser) {
-      errEl.innerHTML = '⚠ User "<b>' + nameInput + '</b>" not found in system. Contact administrator.';
+      errEl.innerHTML = '⚠ User "<b>' + nameInput + '</b>" not found in system.';
+      errEl.style.display = 'block';
+      return;
+    }
+
+    // Strictly check for Admin role
+    if (matchedUser.role !== 'admin') {
+      errEl.innerHTML = 'Access denied. Only <b>Admins</b> are allowed to log in.';
       errEl.style.display = 'block';
       return;
     }
@@ -440,57 +447,71 @@
   // -------------------------------------------------------------
   // TRACKER & FIRESTORE WRITE OPERATIONS
   // -------------------------------------------------------------
+  
   function renderTracker() {
-    const { dates } = state;
-    const q = (document.getElementById('tracker-search').value||'').trim().toLowerCase();
-    const users = q ? state.users.filter(u => u.name.toLowerCase().includes(q) || u.role.toLowerCase().includes(q)) : state.users;
-    const badge = document.getElementById('filter-badge');
+  const { dates } = state;
+  const q = (document.getElementById('tracker-search').value || '').trim().toLowerCase();
+  
+  // 1. Exclude admins first
+  const nonAdminUsers = state.users.filter(u => u.role !== 'admin');
+  
+  // 2. Filter remaining non-admin users by search query
+  const users = q 
+    ? nonAdminUsers.filter(u => u.name.toLowerCase().includes(q) || u.role.toLowerCase().includes(q)) 
+    : nonAdminUsers;
+    
+  const badge = document.getElementById('filter-badge');
 
-    if (q) {
-      badge.style.display = 'inline-flex';
-      badge.innerHTML = `<span class="filter-info">Showing ${users.length} of ${state.users.length} for "<b>${q}</b>" <button class="filter-clear" id="btn-clear-filter">✕</button></span>`;
-      document.getElementById('btn-clear-filter').onclick = () => { document.getElementById('tracker-search').value=''; renderTracker(); };
-    } else {
-      badge.style.display = 'none';
-    }
-    
-    // Header
-    let hHTML = '<tr><th>User Name</th><th>Role</th>';
-    dates.forEach((s) => {
-      hHTML += `<th class="th-center"><div class="date-th-wrap"><span class="date-label">${fmtDate(s.date)}</span><button class="del-date-btn" data-session-id="${s.id}">✕</button></div></th>`;
-    });
-    hHTML += '<th></th></tr>';
-    document.getElementById('tracker-head').innerHTML = hHTML;
-    
-    // Body
-    let bHTML = '';
-    if (!state.users.length) { bHTML = `<tr class="empty-row"><td colspan="${dates.length+3}">No users yet.</td></tr>`; }
-    else if (!users.length) { bHTML = `<tr class="empty-row"><td colspan="${dates.length+3}">No users match "<b>${q}</b>".</td></tr>`; }
-    else {
-      users.forEach(u => {
-        bHTML += `<tr>
-          <td class="user-id-cell"><b>${u.name}</b><br><small style="color:#777; font-size:10px;">${u.id}</small></td>
-          <td><span class="badge ${u.role==='admin'?'badge-success':'badge-info'}">${u.role}</span></td>`;
-        dates.forEach(s => {
-          const chk = state.attendance[attKey(u.id, s.id)] ? 'checked' : '';
-          bHTML += `<td class="td-center"><input type="checkbox" ${chk} data-user="${u.id}" data-session="${s.id}"></td>`;
-        });
-        bHTML += `<td><button class="btn-icon" data-del-user="${u.id}">🗑</button></td></tr>`;
+  if (q) {
+    badge.style.display = 'inline-flex';
+    badge.innerHTML = `<span class="filter-info">Showing ${users.length} of ${nonAdminUsers.length} for "<b>${q}</b>" <button class="filter-clear" id="btn-clear-filter">✕</button></span>`;
+    document.getElementById('btn-clear-filter').onclick = () => { 
+      document.getElementById('tracker-search').value = ''; 
+      renderTracker(); 
+    };
+  } else {
+    badge.style.display = 'none';
+  }
+  
+  // Header
+  let hHTML = '<tr><th>User Name</th><th>Role</th>';
+  dates.forEach((s) => {
+    hHTML += `<th class="th-center"><div class="date-th-wrap"><span class="date-label">${fmtDate(s.date)}</span><button class="del-date-btn" data-session-id="${s.id}">✕</button></div></th>`;
+  });
+  hHTML += '<th></th></tr>';
+  document.getElementById('tracker-head').innerHTML = hHTML;
+  
+  // Body
+  let bHTML = '';
+  if (!nonAdminUsers.length) { 
+    bHTML = `<tr class="empty-row"><td colspan="${dates.length + 3}">No users yet.</td></tr>`; 
+  } else if (!users.length) { 
+    bHTML = `<tr class="empty-row"><td colspan="${dates.length + 3}">No users match "<b>${q}</b>".</td></tr>`; 
+  } else {
+    users.forEach(u => {
+      bHTML += `<tr>
+        <td class="user-id-cell"><b>${u.name}</b></td>
+        <td><span class="badge ${u.role === 'admin' ? 'badge-success' : 'badge-danger'}">${u.role}</span></td>`;
+      dates.forEach(s => {
+        const chk = state.attendance[attKey(u.id, s.id)] ? 'checked' : '';
+        bHTML += `<td class="td-center"><input type="checkbox" ${chk} data-user="${u.id}" data-session="${s.id}"></td>`;
       });
-    }
-    document.getElementById('tracker-body').innerHTML = bHTML;
-
-    // Row Event Handlers
-    document.querySelectorAll('#tracker-head .del-date-btn').forEach(btn => {
-      btn.onclick = () => removeSession(btn.getAttribute('data-session-id'));
-    });
-    document.querySelectorAll('#tracker-body input[type="checkbox"]').forEach(chk => {
-      chk.onchange = (e) => toggleAttendance(e.target.getAttribute('data-user'), e.target.getAttribute('data-session'), e.target.checked);
-    });
-    document.querySelectorAll('#tracker-body .btn-icon').forEach(btn => {
-      btn.onclick = () => removeUser(btn.getAttribute('data-del-user'));
+      bHTML += `<td><button class="btn-icon" data-del-user="${u.id}">✕</button></td></tr>`;
     });
   }
+  document.getElementById('tracker-body').innerHTML = bHTML;
+
+  // Row Event Handlers
+  document.querySelectorAll('#tracker-head .del-date-btn').forEach(btn => {
+    btn.onclick = () => removeSession(btn.getAttribute('data-session-id'));
+  });
+  document.querySelectorAll('#tracker-body input[type="checkbox"]').forEach(chk => {
+    chk.onchange = (e) => toggleAttendance(e.target.getAttribute('data-user'), e.target.getAttribute('data-session'), e.target.checked);
+  });
+  document.querySelectorAll('#tracker-body .btn-icon').forEach(btn => {
+    btn.onclick = () => removeUser(btn.getAttribute('data-del-user'));
+  });
+}
 
   // Toggle Attendance Document
   async function toggleAttendance(userId, sessionId, isChecked) {
@@ -589,12 +610,17 @@
   // -------------------------------------------------------------
   // ANALYTICS & STATUS TABS
   // -------------------------------------------------------------
-  function renderAnalytics() {
-    const { users, dates } = state, total = users.length, sessionCount = dates.length;
+  
+  
+function renderAnalytics() {
+    const nonAdminUsers = state.users.filter(u => u.role !== 'admin');
+    const { dates } = state;
+    const total = nonAdminUsers.length;
+    const sessionCount = dates.length;
     let tot = 0, bestPct = -1, bestDate = '—';
     
     const rows = dates.map(s => {
-      const count = users.filter(u => state.attendance[attKey(u.id, s.id)]).length;
+      const count = nonAdminUsers.filter(u => state.attendance[attKey(u.id, s.id)]).length;
       const pct = total > 0 ? Math.round(count / total * 100) : 0;
       tot += count;
       if (pct > bestPct) { bestPct = pct; bestDate = fmtDate(s.date); }
@@ -620,14 +646,28 @@
     </tr>`).join('');
   }
 
+
+
+
   function renderStatus() {
-    const { users, dates } = state, total = dates.length;
+    const { dates } = state, total = dates.length;
+    
+    // 1. Filter out admins first
+    const nonAdminUsers = state.users.filter(u => u.role !== 'admin');
+    
     const q = (document.getElementById('status-search').value || '').trim().toLowerCase();
-    const filtered = q ? users.filter(u => u.name.toLowerCase().includes(q) || u.role.toLowerCase().includes(q)) : users;
+    
+    // 2. Filter remaining non-admin users by search query
+    const filtered = q 
+      ? nonAdminUsers.filter(u => u.name.toLowerCase().includes(q) || u.role.toLowerCase().includes(q)) 
+      : nonAdminUsers;
+      
     const tbody = document.getElementById('status-body');
     
     if (!filtered.length) { 
-      tbody.innerHTML = q ? `<tr class="empty-row"><td colspan="4">No match for "<b>${q}</b>".</td></tr>` : '<tr class="empty-row"><td colspan="4">No users yet.</td></tr>'; 
+      tbody.innerHTML = q 
+        ? `<tr class="empty-row"><td colspan="4">No match for "<b>${q}</b>".</td></tr>` 
+        : '<tr class="empty-row"><td colspan="4">No users yet.</td></tr>'; 
       return; 
     }
 
