@@ -158,12 +158,17 @@ function fmtDateLong(iso) {
 // AUTHENTICATION (ADMIN ONLY)
 // -------------------------------------------------------------
 function doLogin() {
-  const nameInput = document.getElementById("code-input").value.trim();
+  const codeInput = document.getElementById("code-input");
+  if (!codeInput) return;
+  const nameInput = codeInput.value.trim();
   const errEl = document.getElementById("login-err");
-  errEl.style.display = "none";
+  if (errEl) errEl.style.display = "none";
+
   if (!nameInput) {
-    errEl.textContent = "Please enter your admin name or ID.";
-    errEl.style.display = "block";
+    if (errEl) {
+      errEl.textContent = "Please enter your admin name or ID.";
+      errEl.style.display = "block";
+    }
     return;
   }
 
@@ -174,16 +179,20 @@ function doLogin() {
   );
 
   if (!matchedUser) {
-    errEl.innerHTML = '⚠ User "<b>' + nameInput + '</b>" not found in system.';
-    errEl.style.display = "block";
+    if (errEl) {
+      errEl.innerHTML = '⚠ User "<b>' + nameInput + '</b>" not found in system.';
+      errEl.style.display = "block";
+    }
     return;
   }
 
   // Strictly check for Admin role
   if (matchedUser.role !== "admin") {
-    errEl.innerHTML =
-      "Access denied. Only <b>Admins</b> are allowed to log in.";
-    errEl.style.display = "block";
+    if (errEl) {
+      errEl.innerHTML =
+        "Access denied. Only <b>Admins</b> are allowed to log in.";
+      errEl.style.display = "block";
+    }
     return;
   }
 
@@ -199,9 +208,13 @@ function signOut() {
   currentUser = null;
   document.getElementById("login-page").style.display = "flex";
   document.getElementById("app-page").classList.remove("visible");
-  document.getElementById("code-input").value = "";
-  document.getElementById("login-err").style.display = "none";
-  switchTab("tracker", document.querySelector('.nav-tab[data-tab="tracker"]'));
+  const codeInput = document.getElementById("code-input");
+  if (codeInput) codeInput.value = "";
+  const errEl = document.getElementById("login-err");
+  if (errEl) errEl.style.display = "none";
+  
+  const trackerTab = document.querySelector('.nav-tab[data-tab="tracker"]');
+  if (trackerTab) switchTab("tracker", trackerTab);
 }
 
 function switchTab(name, btn) {
@@ -212,8 +225,11 @@ function switchTab(name, btn) {
   document
     .querySelectorAll(".nav-tab")
     .forEach((b) => b.classList.remove("active"));
-  document.getElementById("tab-" + name).classList.add("active");
-  btn.classList.add("active");
+  
+  const targetTab = document.getElementById("tab-" + name);
+  if (targetTab) targetTab.classList.add("active");
+  if (btn) btn.classList.add("active");
+  
   refreshCurrentView();
 }
 
@@ -231,9 +247,8 @@ function refreshCurrentView() {
 
 function renderTracker() {
   const { dates } = state;
-  const q = (document.getElementById("tracker-search").value || "")
-    .trim()
-    .toLowerCase();
+  const searchInput = document.getElementById("tracker-search");
+  const q = ((searchInput && searchInput.value) || "").trim().toLowerCase();
 
   // 1. Exclude admins first
   const nonAdminUsers = state.users.filter((u) => u.role !== "admin");
@@ -248,15 +263,20 @@ function renderTracker() {
 
   const badge = document.getElementById("filter-badge");
 
-  if (q) {
-    badge.style.display = "inline-flex";
-    badge.innerHTML = `<span class="filter-info">Showing ${users.length} of ${nonAdminUsers.length} for "<b>${q}</b>" <button class="filter-clear" id="btn-clear-filter">✕</button></span>`;
-    document.getElementById("btn-clear-filter").onclick = () => {
-      document.getElementById("tracker-search").value = "";
-      renderTracker();
-    };
-  } else {
-    badge.style.display = "none";
+  if (badge) {
+    if (q) {
+      badge.style.display = "inline-flex";
+      badge.innerHTML = `<span class="filter-info">Showing ${users.length} of ${nonAdminUsers.length} for "<b>${q}</b>" <button class="filter-clear" id="btn-clear-filter">✕</button></span>`;
+      const clearBtn = document.getElementById("btn-clear-filter");
+      if (clearBtn) {
+        clearBtn.onclick = () => {
+          if (searchInput) searchInput.value = "";
+          renderTracker();
+        };
+      }
+    } else {
+      badge.style.display = "none";
+    }
   }
 
   // Header
@@ -269,7 +289,8 @@ function renderTracker() {
     }">✕</button></div></th>`;
   });
   hHTML += "<th></th></tr>";
-  document.getElementById("tracker-head").innerHTML = hHTML;
+  const headEl = document.getElementById("tracker-head");
+  if (headEl) headEl.innerHTML = hHTML;
 
   // Body
   let bHTML = "";
@@ -289,7 +310,8 @@ function renderTracker() {
       bHTML += `<td><button class="btn-icon" data-del-user="${u.id}">✕</button></td></tr>`;
     });
   }
-  document.getElementById("tracker-body").innerHTML = bHTML;
+  const bodyEl = document.getElementById("tracker-body");
+  if (bodyEl) bodyEl.innerHTML = bHTML;
 
   // Row Event Handlers
   document.querySelectorAll("#tracker-head .del-date-btn").forEach((btn) => {
@@ -332,11 +354,12 @@ async function toggleAttendance(userId, sessionId, isChecked) {
 
 // Add Session Document
 async function addDate() {
-  const d = document.getElementById("date-picker").value;
-  if (!d) {
+  const datePicker = document.getElementById("date-picker");
+  if (!datePicker || !datePicker.value) {
     showToast("Pick a date first");
     return;
   }
+  const d = datePicker.value;
   if (state.dates.some((s) => s.date === d)) {
     showToast("Session date already exists");
     return;
@@ -381,13 +404,18 @@ async function removeSession(sessionId) {
 
 // Add User Document with UUID, Name, and Role
 async function confirmAddUser() {
-  const name = document.getElementById("new-user-name").value.trim();
-  const role = document.getElementById("new-user-role").value;
+  const nameEl = document.getElementById("new-user-name");
+  const roleEl = document.getElementById("new-user-role");
   const errEl = document.getElementById("add-user-err");
 
+  const name = nameEl ? nameEl.value.trim() : "";
+  const role = roleEl ? roleEl.value : "user";
+
   if (!name) {
-    errEl.textContent = "Please enter a name.";
-    errEl.style.display = "block";
+    if (errEl) {
+      errEl.textContent = "Please enter a name.";
+      errEl.style.display = "block";
+    }
     return;
   }
 
@@ -402,8 +430,10 @@ async function confirmAddUser() {
     closeAddUserModal();
     showToast("User added: " + name);
   } catch (err) {
-    errEl.textContent = err.message;
-    errEl.style.display = "block";
+    if (errEl) {
+      errEl.textContent = err.message;
+      errEl.style.display = "block";
+    }
   }
 }
 
@@ -435,15 +465,21 @@ async function removeUser(userId) {
 }
 
 function openAddUserModal() {
-  document.getElementById("new-user-name").value = "";
-  document.getElementById("new-user-role").value = "user";
-  document.getElementById("add-user-err").style.display = "none";
-  document.getElementById("add-user-modal").classList.add("open");
-  setTimeout(() => document.getElementById("new-user-name").focus(), 50);
+  const nameEl = document.getElementById("new-user-name");
+  const roleEl = document.getElementById("new-user-role");
+  const errEl = document.getElementById("add-user-err");
+  const modal = document.getElementById("add-user-modal");
+
+  if (nameEl) nameEl.value = "";
+  if (roleEl) roleEl.value = "user";
+  if (errEl) errEl.style.display = "none";
+  if (modal) modal.classList.add("open");
+  if (nameEl) setTimeout(() => nameEl.focus(), 50);
 }
 
 function closeAddUserModal() {
-  document.getElementById("add-user-modal").classList.remove("open");
+  const modal = document.getElementById("add-user-modal");
+  if (modal) modal.classList.remove("open");
 }
 
 // -------------------------------------------------------------
@@ -475,13 +511,18 @@ function renderAnalytics() {
   const possible = total * sessionCount;
   const overall = possible > 0 ? Math.round((tot / possible) * 100) : 0;
 
-  document.getElementById("analytics-metrics").innerHTML = `
-      <div class="metric"><div class="metric-lbl">Total users</div><div class="metric-val">${total}</div></div>
-      <div class="metric"><div class="metric-lbl">Dates</div><div class="metric-val">${sessionCount}</div></div>
-      <div class="metric"><div class="metric-lbl">Overall rate</div><div class="metric-val">${overall}%</div><div class="metric-hint">${tot}/${possible} slots</div></div>
-      <div class="metric"><div class="metric-lbl">Best session</div><div class="metric-val" style="font-size:18px">${sessionCount > 0 ? bestDate : "—"}</div>${sessionCount > 0 ? '<div class="metric-hint">' + bestPct + "% attendance</div>" : ""}</div>`;
+  const metricsEl = document.getElementById("analytics-metrics");
+  if (metricsEl) {
+    metricsEl.innerHTML = `
+        <div class="metric"><div class="metric-lbl">Total users</div><div class="metric-val">${total}</div></div>
+        <div class="metric"><div class="metric-lbl">Dates</div><div class="metric-val">${sessionCount}</div></div>
+        <div class="metric"><div class="metric-lbl">Overall rate</div><div class="metric-val">${overall}%</div><div class="metric-hint">${tot}/${possible} slots</div></div>
+        <div class="metric"><div class="metric-lbl">Best session</div><div class="metric-val" style="font-size:18px">${sessionCount > 0 ? bestDate : "—"}</div>${sessionCount > 0 ? '<div class="metric-hint">' + bestPct + "% attendance</div>" : ""}</div>`;
+  }
 
   const tbody = document.getElementById("analytics-body");
+  if (!tbody) return;
+
   if (!rows.length) {
     tbody.innerHTML =
       '<tr class="empty-row"><td colspan="4">No Dates yet.</td></tr>';
@@ -506,9 +547,8 @@ function renderStatus() {
   // 1. Filter out admins first
   const nonAdminUsers = state.users.filter((u) => u.role !== "admin");
 
-  const q = (document.getElementById("status-search").value || "")
-    .trim()
-    .toLowerCase();
+  const searchEl = document.getElementById("status-search");
+  const q = ((searchEl && searchEl.value) || "").trim().toLowerCase();
 
   // 2. Filter remaining non-admin users by search query
   const filtered = q
@@ -519,6 +559,7 @@ function renderStatus() {
     : nonAdminUsers;
 
   const tbody = document.getElementById("status-body");
+  if (!tbody) return;
 
   if (!filtered.length) {
     tbody.innerHTML = q
@@ -561,6 +602,12 @@ function renderStatus() {
     .map(
       ({ uName, role, attended, pct, bc, label }) => `<tr>
       <td class="user-id-cell"><b>${uName}</b> (${role})</td><td>${attended}/${total}</td>
+      <style>
+        .bar-row { display: flex; align-items: center; gap: 8px; }
+        .bar-bg { flex: 1; background: var(--surface2); height: 6px; border-radius: 3px; overflow: hidden; }
+        .bar-fill { background: var(--accent); height: 100%; }
+        .pct-label { font-size: 11px; color: var(--text2); width: 32px; text-align: right; }
+      </style>
       <td style="min-width:150px"><div class="bar-row"><div class="bar-bg"><div class="bar-fill" style="width:${pct}%"></div></div><span class="pct-label">${pct}%</span></div></td>
       <td><span class="badge ${bc}">${label}</span></td>
     </tr>`,
@@ -571,12 +618,15 @@ function renderStatus() {
 // Data Summary
 function renderDataTab() {
   const recordCount = Object.values(state.attendance).filter(Boolean).length;
-  document.getElementById("data-summary").innerHTML = `
-      👥 <b>${state.users.length}</b> users in <code>users</code> collection<br>
-      📅 <b>${state.dates.length}</b> dates in <code>dates</code> collection<br>
-      ✅ <b>${recordCount}</b> attendance records in <code>attendance</code> collection<br>
-      ⚡ Status: 3-Collection Listener Active
-    `;
+  const summaryEl = document.getElementById("data-summary");
+  if (summaryEl) {
+    summaryEl.innerHTML = `
+        👥 <b>${state.users.length}</b> users in <code>users</code> collection<br>
+        📅 <b>${state.dates.length}</b> dates in <code>dates</code> collection<br>
+        ✅ <b>${recordCount}</b> attendance records in <code>attendance</code> collection<br>
+        ⚡ Status: 3-Collection Listener Active
+      `;
+  }
 }
 
 function exportData() {
@@ -597,6 +647,7 @@ function exportData() {
 let toastTimer;
 function showToast(msg) {
   const t = document.getElementById("toast");
+  if (!t) return;
   t.textContent = msg;
   t.classList.add("show");
   clearTimeout(toastTimer);
@@ -604,80 +655,109 @@ function showToast(msg) {
 }
 
 // Event Listeners Binding
-document.getElementById("btn-login").addEventListener("click", doLogin);
-document.getElementById("code-input").addEventListener("keydown", (e) => {
-  if (e.key === "Enter") doLogin();
-});
-document.getElementById("btn-signout").addEventListener("click", signOut);
+document.addEventListener("DOMContentLoaded", () => {
+  const btnLogin = document.getElementById("btn-login");
+  if (btnLogin) btnLogin.addEventListener("click", doLogin);
 
-document.querySelectorAll(".nav-tab").forEach((btn) => {
-  btn.addEventListener("click", () =>
-    switchTab(btn.getAttribute("data-tab"), btn),
-  );
-});
-
-document.getElementById("btn-add-date").addEventListener("click", addDate);
-document
-  .getElementById("btn-open-add-user")
-  .addEventListener("click", openAddUserModal);
-document
-  .getElementById("btn-close-modal")
-  .addEventListener("click", closeAddUserModal);
-document
-  .getElementById("btn-confirm-user")
-  .addEventListener("click", confirmAddUser);
-document
-  .getElementById("tracker-search")
-  .addEventListener("input", renderTracker);
-document
-  .getElementById("status-search")
-  .addEventListener("input", renderStatus);
-document.getElementById("btn-export").addEventListener("click", exportData);
-
-document.getElementById("add-user-modal").addEventListener("click", (e) => {
-  if (e.target === e.currentTarget) closeAddUserModal();
-});
-
-// Init default date input
-document.getElementById("date-picker").value = new Date()
-  .toISOString()
-  .split("T")[0];
-
-const themeToggleBtn = document.getElementById("theme-toggle");
-const themeIcon = document.getElementById("theme-icon");
-const themeText = document.getElementById("theme-text");
-
-// 1. Check for saved theme or default to system preference
-const savedTheme = localStorage.getItem("theme");
-const systemPrefersLight = window.matchMedia(
-  "(prefers-color-scheme: light)",
-).matches;
-
-if (savedTheme) {
-  document.documentElement.setAttribute("data-theme", savedTheme);
-  updateToggleUI(savedTheme);
-} else if (systemPrefersLight) {
-  document.documentElement.setAttribute("data-theme", "light");
-  updateToggleUI("light");
-}
-
-// 2. Add event listener to toggle theme
-themeToggleBtn.addEventListener("click", () => {
-  const currentTheme = document.documentElement.getAttribute("data-theme");
-  const newTheme = currentTheme === "light" ? "dark" : "light";
-
-  document.documentElement.setAttribute("data-theme", newTheme);
-  localStorage.setItem("theme", newTheme);
-  updateToggleUI(newTheme);
-});
-
-// 3. Update button text/icon UI
-function updateToggleUI(theme) {
-  if (theme === "light") {
-    themeText.textContent = "Light";
-    themeIcon.textContent = "☀️";
-  } else {
-    themeIcon.textContent = "🌙";
-    themeText.textContent = "Dark";
+  const codeInput = document.getElementById("code-input");
+  if (codeInput) {
+    codeInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") doLogin();
+    });
   }
-}
+
+  const btnSignout = document.getElementById("btn-signout");
+  if (btnSignout) btnSignout.addEventListener("click", signOut);
+
+  document.querySelectorAll(".nav-tab").forEach((btn) => {
+    btn.addEventListener("click", () =>
+      switchTab(btn.getAttribute("data-tab"), btn),
+    );
+  });
+
+  const btnAddDate = document.getElementById("btn-add-date");
+  if (btnAddDate) btnAddDate.addEventListener("click", addDate);
+
+  const btnOpenUser = document.getElementById("btn-open-add-user");
+  if (btnOpenUser) btnOpenUser.addEventListener("click", openAddUserModal);
+
+  const btnCloseModal = document.getElementById("btn-close-modal");
+  if (btnCloseModal) btnCloseModal.addEventListener("click", closeAddUserModal);
+
+  const btnConfirmUser = document.getElementById("btn-confirm-user");
+  if (btnConfirmUser) btnConfirmUser.addEventListener("click", confirmAddUser);
+
+  const trackerSearch = document.getElementById("tracker-search");
+  if (trackerSearch) trackerSearch.addEventListener("input", renderTracker);
+
+  const statusSearch = document.getElementById("status-search");
+  if (statusSearch) statusSearch.addEventListener("input", renderStatus);
+
+  const btnExport = document.getElementById("btn-export");
+  if (btnExport) btnExport.addEventListener("click", exportData);
+
+  const modal = document.getElementById("add-user-modal");
+  if (modal) {
+    modal.addEventListener("click", (e) => {
+      if (e.target === e.currentTarget) closeAddUserModal();
+    });
+  }
+
+  // Init default date input
+  const datePicker = document.getElementById("date-picker");
+  if (datePicker) {
+    datePicker.value = new Date().toISOString().split("T")[0];
+  }
+
+  // Theme Controls
+  const themeToggleBtn = document.getElementById("theme-toggle");
+  const themeIcon = document.getElementById("theme-icon");
+  const themeText = document.getElementById("theme-text");
+
+  function updateToggleUI(theme) {
+    if (!themeText || !themeIcon) return;
+    if (theme === "light") {
+      themeText.textContent = "Light";
+      themeIcon.textContent = "☀️";
+    } else {
+      themeIcon.textContent = "🌙";
+      themeText.textContent = "Dark";
+    }
+  }
+
+  const savedTheme = localStorage.getItem("theme");
+  const systemPrefersLight = window.matchMedia("(prefers-color-scheme: light)").matches;
+
+  if (savedTheme) {
+    document.documentElement.setAttribute("data-theme", savedTheme);
+    updateToggleUI(savedTheme);
+  } else if (systemPrefersLight) {
+    document.documentElement.setAttribute("data-theme", "light");
+    updateToggleUI("light");
+  }
+
+  if (themeToggleBtn) {
+    themeToggleBtn.addEventListener("click", () => {
+      const currentTheme = document.documentElement.getAttribute("data-theme");
+      const newTheme = currentTheme === "light" ? "dark" : "light";
+
+      document.documentElement.setAttribute("data-theme", newTheme);
+      localStorage.setItem("theme", newTheme);
+      updateToggleUI(newTheme);
+    });
+  }
+});
+
+// -------------------------------------------------------------
+// GLOBAL WINDOW BINDINGS (Required for ES Module Compatibility)
+// -------------------------------------------------------------
+window.doLogin = doLogin;
+window.signOut = signOut;
+window.switchTab = switchTab;
+window.addDate = addDate;
+window.removeSession = removeSession;
+window.confirmAddUser = confirmAddUser;
+window.openAddUserModal = openAddUserModal;
+window.closeAddUserModal = closeAddUserModal;
+window.removeUser = removeUser;
+window.exportData = exportData;
